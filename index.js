@@ -1,12 +1,18 @@
 "use strict";
 
-import { InstanaExporter } from "@instana/opentelemetry-exporter";
 import opentelemetry, { DiagConsoleLogger, DiagLogLevel, diag } from "@opentelemetry/api";
+import core_1 from "@opentelemetry/core";
+
+// UNCOMMENT IF YOU WANT TO SENT TRACES VIA gRPC
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-grpc";
+// UNCOMMENT IF YOU WANT TO SENT TRACES VIA http/proto
+//import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+// UNCOMMENT IF YOU WANT TO SENT TRACES VIA http/json
+// import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { Resource } from "@opentelemetry/resources";
 import { BasicTracerProvider, ConsoleSpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { config } from "dotenv";
-//const { JaegerExporter } = require("@opentelemetry/exporter-jaeger");
 
 config();
 
@@ -16,14 +22,9 @@ const provider = new BasicTracerProvider({
   }),
 });
 
-// Configure span processor to send spans to the exporter
-// const exporter = new JaegerExporter({
-//   endpoint: "http://localhost:14268/api/traces",
-// });
-
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
 
-const exporter = new InstanaExporter();
+const exporter = new OTLPTraceExporter();
 provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
 provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
 
