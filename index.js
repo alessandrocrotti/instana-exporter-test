@@ -1,14 +1,12 @@
 "use strict";
 
 import opentelemetry, { DiagConsoleLogger, DiagLogLevel, diag } from "@opentelemetry/api";
-import core_1 from "@opentelemetry/core";
+import grpc from "@grpc/grpc-js";
 
-// UNCOMMENT IF YOU WANT TO SENT TRACES VIA gRPC
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-grpc";
-// UNCOMMENT IF YOU WANT TO SENT TRACES VIA http/proto
-//import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
-// UNCOMMENT IF YOU WANT TO SENT TRACES VIA http/json
-// import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { OTLPTraceExporter as OTLPTraceExporterGRPC } from "@opentelemetry/exporter-trace-otlp-grpc";
+import { OTLPTraceExporter as OTLPTraceExporterProto } from "@opentelemetry/exporter-trace-otlp-proto";
+import { OTLPTraceExporter as OTLPTraceExporterJson } from "@opentelemetry/exporter-trace-otlp-http";
 import { Resource } from "@opentelemetry/resources";
 import { BasicTracerProvider, ConsoleSpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
@@ -25,7 +23,42 @@ const provider = new BasicTracerProvider({
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
 
 const exporter = new OTLPTraceExporter();
-provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+
+// SETTING INSTANA EXPORTER
+const metadataInstana = new grpc.Metadata();
+metadataInstana.set("x-instana-key", process.env.OTEL_EXPORTER_INSTANA_KEY);
+metadataInstana.set("x-instana-host", process.env.OTEL_EXPORTER_INSTANA_HOST);
+
+const exporterInstana = new OTLPTraceExporterProto({
+  url: process.env.OTEL_EXPORTER_INSTANA_ENDPOINT,
+  headers: {
+    "x-instana-key": process.env.OTEL_EXPORTER_INSTANA_KEY,
+    //"x-instana-host": process.env.OTEL_EXPORTER_INSTANA_HOST,
+  },
+  // metadata: metadataInstana,
+});
+
+// SETTING NEW RELIC EXPORTER
+const exporterNewRelic = new OTLPTraceExporterJson({
+  url: process.env.OTEL_EXPORTER_NEWRELIC_ENDPOINT,
+  headers: {
+    "api-key": process.env.OTEL_EXPORTER_NEWRELIC_APIKEY,
+  },
+});
+
+// SETTING SPLUNK EXPORTER
+const exporterSplunk = new OTLPTraceExporterProto({
+  url: process.env.OTEL_EXPORTER_SPLUNK_ENDPOINT,
+  headers: {
+    "X-SF-Token": process.env.OTEL_EXPORTER_SPLUNK_TOKEN,
+  },
+});
+
+diag.debug("CUSTOM INDEX LEVEL LOG: exporter", exporter.url, exporter.headers, exporter.metadata, exporterSplunk.url, exporterSplunk.headers, exporterSplunk.metadata);
+//provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+provider.addSpanProcessor(new SimpleSpanProcessor(exporterInstana));
+// provider.addSpanProcessor(new SimpleSpanProcessor(exporterNewRelic));
+// provider.addSpanProcessor(new SimpleSpanProcessor(exporterSplunk));
 provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
 
 /**
@@ -52,6 +85,9 @@ parentSpan.end();
 
 // flush and close the connection.
 exporter.shutdown();
+exporterInstana.shutdown();
+exporterNewRelic.shutdown();
+exporterSplunk.shutdown();
 
 function doWork(parent) {
   // Start another span. In this example, the main method already started a
